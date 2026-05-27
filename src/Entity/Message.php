@@ -7,30 +7,55 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
+use ApiPlatform\Metadata\ApiResource;
+use Symfony\Component\Serializer\Annotation\Groups;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Patch;
+use ApiPlatform\Metadata\Delete;
+use ApiPlatform\Metadata\Post;
+use ApiPlatform\Metadata\Put;
 
+#[ApiResource(
+    paginationItemsPerPage: 10,
+    operations: [
+        new GetCollection(normalizationContext: ['groups' => 'message:list']),
+        new Post(),
+        new Get(normalizationContext: ['groups' => 'message:item']),
+        new Put(),
+        new Patch(),
+        new Delete(),
+    ],
+)]
 #[ORM\Entity(repositoryClass: MessageRepository::class)]
 class Message
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['message:list', 'message:item'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 50)]
+    #[Groups(['message:list', 'message:item'])]
     private ?string $titre = null;
 
-    #[ORM\Column]
+    #[ORM\Column(type: Types::DATETIME_MUTABLE)]
+    #[Groups(['message:list', 'message:item'])]
     private ?\DateTime $datePoste = null;
 
     #[ORM\Column(type: Types::TEXT)]
+    #[Groups(['message:list', 'message:item'])]
     private ?string $contenu = null;
 
     #[ORM\ManyToOne(inversedBy: 'messages')]
     #[ORM\JoinColumn(nullable: false)]
+    #[Groups(['message:list', 'message:item'])]
     private ?User $user = null;
 
     #[ORM\ManyToOne(targetEntity: self::class, inversedBy: 'messages')]
     #[ORM\JoinColumn(nullable: true)]
+    #[Groups(['message:list', 'message:item'])]
     private ?self $parent = null;
 
     /**
@@ -61,15 +86,17 @@ class Message
         return $this;
     }
 
-    public function getDatePoste(): ?\DateTime
+    public function getDatePoste(): ?\DateTimeInterface
     {
+    
         return $this->datePoste;
     }
-
-    public function setDatePoste(\DateTime $datePoste): static
+    
+    public function setDatePoste(\DateTimeInterface $datePoste): static
     {
-        $this->datePoste = $datePoste;
 
+        $this->datePoste = $datePoste;
+    
         return $this;
     }
 

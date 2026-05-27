@@ -2,13 +2,37 @@
 
 namespace App\Entity;
 
+use ApiPlatform\Doctrine\Orm\Filter\SearchFilter;
+use ApiPlatform\Metadata\ApiFilter;
+use ApiPlatform\Metadata\ApiResource;
+use ApiPlatform\Metadata\Delete;
+use ApiPlatform\Metadata\Get;
+use ApiPlatform\Metadata\GetCollection;
+use ApiPlatform\Metadata\Patch;
+use ApiPlatform\Metadata\Post;
+use ApiPlatform\Metadata\Put;
 use App\Repository\UserRepository;
+use App\State\UserStateProcessor;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
 use Symfony\Component\Security\Core\User\UserInterface;
+use Symfony\Component\Serializer\Annotation\Groups;
+use Symfony\Component\Validator\Constraints as Assert;
 
+#[ApiResource(
+    paginationItemsPerPage: 10,
+    operations: [
+        new GetCollection(normalizationContext: ['groups' => 'user:list']),
+        new Post(processor: UserStateProcessor::class, denormalizationContext: ['groups' => ['user:write']]),
+        new Get(normalizationContext: ['groups' => 'user:item']),
+        new Put(),
+        new Patch(security: "is_granted('ROLE_ADMIN') or object == user"),
+        new Delete(),
+    ],
+)]
+#[ApiFilter(SearchFilter::class, properties: ['id' => 'exact', 'nom' => 'exact', 'prenom' => 'partial'])]
 #[ORM\Entity(repositoryClass: UserRepository::class)]
 #[ORM\UniqueConstraint(name: 'UNIQ_IDENTIFIER_EMAIL', fields: ['email'])]
 class User implements UserInterface, PasswordAuthenticatedUserInterface
@@ -16,9 +40,13 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
+    #[Groups(['user:list', 'user:item'])]
     private ?int $id = null;
 
     #[ORM\Column(length: 180)]
+    #[Groups(['user:item', 'user:write'])]
+    #[Assert\NotBlank(message: "L'email est obligatoire.")]
+    #[Assert\Email(message: "L'email n'est pas valide.")]
     private ?string $email = null;
 
     /**
@@ -31,12 +59,30 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
      * @var string The hashed password
      */
     #[ORM\Column]
+    #[Groups(['user:write'])]
+    #[Assert\NotBlank(message: "Le mot de passe est obligatoire.")]
+    #[Assert\Regex(
+        pattern: "/^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{12,}$/",
+        message: "Le mot de passe doit contenir au moins 12 caractères, une majuscule, une minuscule, un chiffre et un caractère spécial."
+    )]
     private ?string $password = null;
 
     #[ORM\Column(length: 30)]
+    #[Groups(['user:list', 'user:item', 'message:list', 'message:item', 'user:write'])]
+    #[Assert\NotBlank(message: "Le nom est obligatoire.")]
+    #[Assert\Regex(
+        pattern: "/^[a-zA-ZÀ-ÿ '-]+$/u",
+        message: "Le nom ne doit contenir que des lettres."
+    )]
     private ?string $nom = null;
 
     #[ORM\Column(length: 30)]
+    #[Groups(['user:list', 'user:item', 'message:list', 'message:item', 'user:write'])]
+    #[Assert\NotBlank(message: "Le prénom est obligatoire.")]
+    #[Assert\Regex(
+        pattern: "/^[a-zA-ZÀ-ÿ '-]+$/u",
+        message: "Le prénom ne doit contenir que des lettres."
+    )]
     private ?string $prenom = null;
 
     #[ORM\Column]
@@ -45,12 +91,13 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     /**
      * @var Collection<int, Message>
      */
-    #[ORM\OneToMany(targetEntity: Message::class, mappedBy: 'user', orphanRemoval: true)]
+    #[ORM\OneToMany(targetEntity : Message::class, mappedBy: 'user', orphanRemoval: true)]
     private Collection $messages;
 
     public function __construct()
     {
         $this->messages = new ArrayCollection();
+        $this->dateInscription = new \DateTime();
     }
 
     public function getId(): ?int
@@ -123,7 +170,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function __serialize(): array
     {
         $data = (array) $this;
-        $data["\0".self::class."\0password"] = hash('crc32c', $this->password);
+        $data["\0" . self::class . "\0password"] = hash('crc32c', $this->password);
 
         return $data;
     }
